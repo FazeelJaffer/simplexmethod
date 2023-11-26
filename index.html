@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simplex Method Solver</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        h1 {
+            color: #0066cc;
+        }
+
+        label {
+            display: block;
+            margin-top: 10px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        textarea,
+        input {
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+
+        button {
+            background-color: #0066cc;
+            color: #fff;
+            margin-top: 10px;
+            padding: 10px;
+            cursor: pointer;
+            font-size: 18px;
+            border: none;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            margin-top: 20px;
+            font-size: 16px;
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+
+        #example {
+            margin-top: 20px;
+            font-size: 18px;
+        }
+
+        #results {
+            margin-top: 20px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Simplex Method Solver</h1>
+
+    <div id="example">
+        <h2>Example:</h2>
+        <p>Fill in the fields with the provided example values:</p>
+        <p>Columns: 6</p>
+        <p>Rows: 3</p>
+        <p>Objective Function Coefficients: -6 -5 -4 0 0 0</p>
+        <p>Constraints Constants: 240 360 300</p>
+        <p>Constraints Coefficients:</p>
+        <pre>2 1 1 1 0 0
+1 3 2 0 1 0
+2 1 2 0 0 1</pre>
+    </div>
+
+    <label for="colSizeA">Number of Columns:</label>
+    <input type="number" id="colSizeA" value="6">
+
+    <label for="rowSizeA">Number of Rows:</label>
+    <input type="number" id="rowSizeA" value="3">
+
+    <label for="C">Objective Function Coefficients (space-separated):</label>
+    <textarea id="C">-6 -5 -4 0 0 0</textarea>
+
+    <label for="B">Constraints Constants (space-separated):</label>
+    <textarea id="B">240 360 300</textarea>
+
+    <label for="A">Constraints Coefficients (row-wise, space-separated):</label>
+    <textarea id="A">2 1 1 1 0 0
+        1 3 2 0 1 0
+        2 1 2 0 0 1</textarea>
+
+    <button onclick="solveSimplex()">Solve</button>
+
+    <h2>Results:</h2>
+    <pre id="results">Results will be displayed here.</pre>
+
+    <script>
+        function solveSimplex() {
+            // Get input values
+            const colSizeA = parseInt(document.getElementById('colSizeA').value);
+            const rowSizeA = parseInt(document.getElementById('rowSizeA').value);
+            const C = document.getElementById('C').value.split(' ').map(Number);
+            const B = document.getElementById('B').value.split(' ').map(Number);
+            const A = [];
+
+            const rawA = document.getElementById('A').value.split(' ').map(Number);
+            for (let i = 0; i < rowSizeA; i++) {
+                A.push(rawA.slice(i * colSizeA, (i + 1) * colSizeA));
+            }
+
+            // Create Simplex object
+            const simplex = new Simplex(A, B, C);
+
+            // Solve Simplex
+            const results = simplex.CalculateSimplex();
+
+            // Display results
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.textContent = results;
+        }
+
+        class Simplex {
+            constructor(matrix, b, c) {
+                this.maximum = 0;
+                this.isUnbounded = false;
+                this.rows = matrix.length;
+                this.cols = matrix[0].length;
+                this.A = matrix.map(row => [...row]);
+                this.B = [...b];
+                this.C = c.map(val => -1 * val);
+            }
+
+            simplexAlgorithmCalculation() {
+                if (this.checkOptimality()) {
+                    return true;
+                }
+
+                const pivotColumn = this.findPivotColumn();
+
+                if (this.isUnbounded) {
+                    console.log("Error unbounded");
+                    return true;
+                }
+
+                const pivotRow = this.findPivotRow(pivotColumn);
+
+                this.doPivoting(pivotRow, pivotColumn);
+
+                return false;
+            }
+
+            checkOptimality() {
+                let isOptimal = false;
+                let positiveValueCount = 0;
+
+                for (let i = 0; i < this.C.length; i++) {
+                    const value = this.C[i];
+                    if (value >= 0) {
+                        positiveValueCount++;
+                    }
+                }
+
+                if (positiveValueCount === this.C.length) {
+                    isOptimal = true;
+                    this.print();
+                }
+
+                return isOptimal;
+            }
+
+            doPivoting(pivotRow, pivotColumn) {
+                const pivotValue = this.A[pivotRow][pivotColumn];
+                const pivotRowValues = this.A[pivotRow].slice();
+                const pivotColumnValues = this.A.map(row => row[pivotColumn]);
+                const newRow = pivotRowValues.map(val => val / pivotValue);
+
+                this.B[pivotRow] = this.B[pivotRow] / pivotValue;
+
+                // Update the maximum value correctly
+                this.maximum -= this.C[pivotColumn] * this.B[pivotRow];
+
+                for (let m = 0; m < this.rows; m++) {
+                    if (m !== pivotRow) {
+                        const multiplyValue = pivotColumnValues[m];
+                        this.A[m] = this.A[m].map((val, p) => val - multiplyValue * newRow[p]);
+                    }
+                }
+
+                for (let i = 0; i < this.B.length; i++) {
+                    if (i !== pivotRow) {
+                        const multiplyValue = pivotColumnValues[i];
+                        this.B[i] = this.B[i] - multiplyValue * this.B[pivotRow];
+                    }
+                }
+
+                const multiplyValue = this.C[pivotColumn];
+                this.C = this.C.map((val, i) => val - multiplyValue * newRow[i]);
+
+                this.A[pivotRow] = newRow;
+            }
+
+
+            print() {
+                console.log("Optimal Solution:");
+                console.log("Objective Function Coefficients (C):", this.C);
+                console.log("Constraints Constants (B):", this.B);
+                console.log("Constraints Coefficients (A):", this.A);
+                console.log("Maximum Value:", this.maximum);
+            }
+
+            findPivotColumn() {
+                let location = 0;
+                let minm = this.C[0];
+
+                for (let i = 1; i < this.C.length; i++) {
+                    if (this.C[i] < minm) {
+                        minm = this.C[i];
+                        location = i;
+                    }
+                }
+
+                return location;
+            }
+
+            findPivotRow(pivotColumn) {
+                const positiveValues = this.A.map(row => (row[pivotColumn] > 0 ? row[pivotColumn] : 0));
+                const result = this.A.map((row, i) => (positiveValues[i] > 0 ? this.B[i] / positiveValues[i] : 0));
+
+                if (result.every(val => val <= 0)) {
+                    this.isUnbounded = true;
+                }
+
+                let minimum = Infinity;
+                let location = 0;
+
+                result.forEach((val, i) => {
+                    if (val > 0 && val < minimum) {
+                        minimum = val;
+                        location = i;
+                    }
+                });
+
+                return location;
+            }
+
+            CalculateSimplex() {
+                console.log("Initial array and is Not optimal");
+                console.log(this.getStringRepresentation());
+
+                console.log("");
+
+                console.log("Final array and is Optimal solution");
+
+                for (let iteration = 1; iteration <= 20; iteration++) {
+                    const result = this.simplexAlgorithmCalculation();
+                    if (result) {
+                        break;
+                    }
+                    console.log(`Iteration ${iteration}:`);
+                    console.log(this.getStringRepresentation());
+                }
+
+                let resultString = "Answers for the Constraints of variables\n";
+
+                for (let i = 0; i < this.A[0].length; i++) {
+                    let count0 = 0;
+                    let index = 0;
+                    for (let j = 0; j < this.rows; j++) {
+                        if (this.A[j][i] === 0) {
+                            count0++;
+                        } else if (this.A[j][i] === 1) {
+                            index = j;
+                        }
+                    }
+
+                    if (count0 === this.rows - 1) {
+                        resultString += `variable${index + 1}: ${this.B[index]}\n`;
+                    } else {
+                        resultString += `variable${index + 1}: 0\n`;
+                    }
+                }
+
+                resultString += `\nMaximum Value: ${this.maximum}\n`;
+
+                return resultString;
+            }
+
+            getStringRepresentation() {
+                let resultString = "";
+                for (let i = 0; i < this.rows; i++) {
+                    for (let j = 0; j < this.cols; j++) {
+                        resultString += this.A[i][j] + " ";
+                    }
+                    resultString += "\n";
+                }
+                return resultString;
+            }
+        }
+    </script>
+</body>
+
+</html>
+
+</body>
+
+</html>
